@@ -10,7 +10,7 @@ LDFLAGS=$(shell build/ldflags.sh)
 
 # kubernetes client won't build with go<1.10
 GOVERSION:=$(shell go version | awk '{print $$3}')
-GOVERSION_MIN:=go1.16
+GOVERSION_MIN:=go1.17
 GOVERSION_CHECK=$(shell printf "%s\n%s\n" "$(GOVERSION)" "$(GOVERSION_MIN)" | sort -t. -k 1,1n -k 2,2n -k 3,3n -k 4,4n | head -n 1)
 
 # Test parameters
@@ -37,7 +37,7 @@ test:
 	./test.sh
 
 test-setup:
-	kind create cluster --name ${TEST_CLUSTER_NAME} --image kindest/node:v1.15.0
+	kind create cluster --name ${TEST_CLUSTER_NAME} --image kindest/node:v1.20.15@sha256:6f2d011dffe182bad80b85f6c00e8ca9d86b5b8922cdf433d53575c4c5212248
 
 test-teardown:
 	kind delete cluster --name ${TEST_CLUSTER_NAME}
@@ -47,7 +47,7 @@ show-coverage: test
 
 setup:
 	$(GOMOD) download
-	$(GOMOD) tidy
+	$(GOMOD) tidy -compat=1.17
 
 clean:
 	$(GOCLEAN)

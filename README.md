@@ -2,7 +2,10 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/Shopify/kubeaudit)](https://goreportcard.com/report/github.com/Shopify/kubeaudit)
 [![GoDoc](https://godoc.org/github.com/Shopify/kubeaudit?status.png)](https://godoc.org/github.com/Shopify/kubeaudit)
 
-> Kubeaudit can now be used as both a command line tool (CLI) and as a Go package!
+> It is now a requirement for clusters to run Kubernetes >=1.19.
+
+> override labels with unregistered `kubernetes.io` annotations will be deprecated. It'll soon be a requirement to use `kubeaudit.io` instead.
+Refer to this [discussion](https://github.com/Shopify/kubeaudit/issues/457) for additional context.
 
 # kubeaudit :cloud: :lock: :muscle:
 
@@ -46,8 +49,8 @@ Kubeaudit has official releases that are blessed and stable:
 
 ### DIY build
 
-Master may have newer features than the stable releases. If you need a newer
-feature not yet included in a release, make sure you're using Go 1.16+ and run
+Main may have newer features than the stable releases. If you need a newer
+feature not yet included in a release, make sure you're using Go 1.17+ and run
 the following:
 
 ```sh
@@ -70,7 +73,9 @@ or
 
 ### Docker
 
-We also release a [Docker image](https://hub.docker.com/r/shopify/kubeaudit): `shopify/kubeaudit`. To run kubeaudit as a job in your cluster see [Running kubeaudit in a cluster](docs/cluster.md).
+We no longer release images to Docker Hub (since Docker Hub sunset Free Team organizations). For the time being, [old images](https://hub.docker.com/r/shopify/kubeaudit) are still available but may stop being available at any time. We will start publishing images to the Github Container registry soon.
+
+To run kubeaudit as a job in your cluster see [Running kubeaudit in a cluster](docs/cluster.md).
 
 ## Quick Start
 
@@ -155,9 +160,9 @@ kubeaudit all
 
 ### Local Mode
 
-Kubeaudit will try to connect to a cluster using the local kubeconfig file (`$HOME/.kube/config`). A different kubeconfig location can be specified using the `-c/--kubeconfig` flag.
+Kubeaudit will try to connect to a cluster using the local kubeconfig file (`$HOME/.kube/config`). A different kubeconfig location can be specified using the `--kubeconfig` flag. To specify a context of the kubeconfig, use the `-c/--context` flag.
 ```
-kubeaudit all -c "/path/to/config"
+kubeaudit all --kubeconfig "/path/to/config" --context my_cluster
 ```
 
 For more information on kubernetes config files, see https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/
@@ -166,13 +171,18 @@ For more information on kubernetes config files, see https://kubernetes.io/docs/
 
 Kubeaudit produces results with three levels of severity:
 
-`Error`: A security issue or invalid kubernetes configuration
-`Warning`: A best practice recommendation
-`Info`: Informational, no action required. This includes results that are [overridden](#override-errors)
+- `Error`: A security issue or invalid kubernetes configuration
+- `Warning`: A best practice recommendation
+- `Info`: Informational, no action required. This includes results that are [overridden](#override-errors)
 
 The minimum severity level can be set using the `--minSeverity/-m` flag.
 
-By default kubeaudit will output results in a human-readable way. If the output is intended to be further processed, it can be set to output JSON using the `--format json` flag. To output results as logs (the previous default) use `--format logrus`.
+By default kubeaudit will output results in a human-readable way. If the output is intended to be further processed, it can be set to output JSON using the `--format json` flag. To output results as logs (the previous default) use `--format logrus`. Some output formats include colors to make results easier to read in a terminal. To disable colors (for example, if you are sending output to a text file), you can use the `--no-color` flag.
+
+You can generate a kubeaudit report in [SARIF](https://docs.oasis-open.org/sarif/sarif/v2.0/sarif-v2.0.html) using the `--format sarif` flag. To write the SARIF results to a file, you can redirect the output with `>`. For example:
+```
+kubeaudit all -f path-to-my-file.yaml --format="sarif" > example.sarif
+```
 
 If there are results of severity level `error`, kubeaudit will exit with exit code 2. This can be changed using the `--exitcode/-e` flag.
 
@@ -190,32 +200,36 @@ For all the ways kubeaudit can be customized, see [Global Flags](#global-flags).
 
 Auditors can also be run individually.
 
-| Command        | Description                                                                                                    | Documentation                         |
-| :------------- | :------------------------------------------------------------------------------------------------------------- | :------------------------------------ |
-| `apparmor`     | Finds containers running without AppArmor.                                                                     | [docs](docs/auditors/apparmor.md)     |
-| `asat`         | Finds pods using an automatically mounted default service account                                              | [docs](docs/auditors/asat.md)         |
-| `capabilities` | Finds containers that do not drop the recommended capabilities or add new ones.                                | [docs](docs/auditors/capabilities.md) |
-| `hostns`       | Finds containers that have HostPID, HostIPC or HostNetwork enabled.                                            | [docs](docs/auditors/hostns.md)       |
-| `image`        | Finds containers which do not use the desired version of an image (via the tag) or use an image without a tag. | [docs](docs/auditors/image.md)        |
-| `limits`       | Finds containers which exceed the specified CPU and memory limits or do not specify any.                       | [docs](docs/auditors/limits.md)       |
-| `mounts`       | Finds containers that have sensitive host paths mounted.                                                       | [docs](docs/auditors/mounts.md)      |
-| `netpols`      | Finds namespaces that do not have a default-deny network policy.                                               | [docs](docs/auditors/netpols.md)      |
-| `nonroot`      | Finds containers running as root.                                                                              | [docs](docs/auditors/nonroot.md)      |
-| `privesc`      | Finds containers that allow privilege escalation.                                                              | [docs](docs/auditors/privesc.md)      |
-| `privileged`   | Finds containers running as privileged.                                                                        | [docs](docs/auditors/privileged.md)   |
-| `rootfs`       | Finds containers which do not have a read-only filesystem.                                                     | [docs](docs/auditors/rootfs.md)       |
-| `seccomp`      | Finds containers running without Seccomp.                                                                      | [docs](docs/auditors/seccomp.md)      |
+| Command          | Description                                                                                                    | Documentation                           |
+| :--------------- | :------------------------------------------------------------------------------------------------------------- | :-------------------------------------- |
+| `apparmor`       | Finds containers running without AppArmor.                                                                     | [docs](docs/auditors/apparmor.md)       |
+| `asat`           | Finds pods using an automatically mounted default service account                                              | [docs](docs/auditors/asat.md)           |
+| `capabilities`   | Finds containers that do not drop the recommended capabilities or add new ones.                                | [docs](docs/auditors/capabilities.md)   |
+| `deprecatedapis` | Finds any resource defined with a deprecated API version.                                                      | [docs](docs/auditors/deprecatedapis.md) |
+| `hostns`         | Finds containers that have HostPID, HostIPC or HostNetwork enabled.                                            | [docs](docs/auditors/hostns.md)         |
+| `image`          | Finds containers which do not use the desired version of an image (via the tag) or use an image without a tag. | [docs](docs/auditors/image.md)          |
+| `limits`         | Finds containers which exceed the specified CPU and memory limits or do not specify any.                       | [docs](docs/auditors/limits.md)         |
+| `mounts`         | Finds containers that have sensitive host paths mounted.                                                       | [docs](docs/auditors/mounts.md)         |
+| `netpols`        | Finds namespaces that do not have a default-deny network policy.                                               | [docs](docs/auditors/netpols.md)        |
+| `nonroot`        | Finds containers running as root.                                                                              | [docs](docs/auditors/nonroot.md)        |
+| `privesc`        | Finds containers that allow privilege escalation.                                                              | [docs](docs/auditors/privesc.md)        |
+| `privileged`     | Finds containers running as privileged.                                                                        | [docs](docs/auditors/privileged.md)     |
+| `rootfs`         | Finds containers which do not have a read-only filesystem.                                                     | [docs](docs/auditors/rootfs.md)         |
+| `seccomp`        | Finds containers running without Seccomp.                                                                      | [docs](docs/auditors/seccomp.md)        |
 
 ### Global Flags
 
-| Short | Long          | Description                                                                                                                                            |
-| :---- | :------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
-|       | --format      | The output format to use (one of "pretty", "logrus", "json") (default is "pretty")                                                                     |
-| -c    | --kubeconfig  | Path to local Kubernetes config file. Only used in local mode (default is `$HOME/.kube/config`)                                                        |
-| -f    | --manifest    | Path to the yaml configuration to audit. Only used in manifest mode.                                                                                   |
-| -n    | --namespace   | Only audit resources in the specified namespace. Not currently supported in manifest mode.                                                             |
-| -m    | --minseverity | Set the lowest severity level to report (one of "error", "warning", "info") (default "info")                                                           |
-| -e    | --exitcode    | Exit code to use if there are results with severity of "error". Conventionally, 0 is used for success and all non-zero codes for an error. (default 2) |
+| Short | Long               | Description                                                                                                                                            |
+| :---- | :----------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
+|       | --format           | The output format to use (one of "sarif", "pretty", "logrus", "json") (default is "pretty")                                                                     |
+|       | --kubeconfig       | Path to local Kubernetes config file. Only used in local mode (default is `$HOME/.kube/config`)                                                        |
+| -c    | --context          | The name of the kubeconfig context to use                                                                                                              |
+| -f    | --manifest         | Path to the yaml configuration to audit. Only used in manifest mode. You may use `-` to read from stdin.                                               |
+| -n    | --namespace        | Only audit resources in the specified namespace. Not currently supported in manifest mode.                                                             |
+| -g    | --includegenerated | Include generated resources in scan  (such as Pods generated by deployments). If you would like kubeaudit to produce results for generated resources (for example if you have custom resources or want to catch orphaned resources where the owner resource no longer exists) you can use this flag. |
+| -m    | --minseverity      | Set the lowest severity level to report (one of "error", "warning", "info") (default is "info")                                                           |
+| -e    | --exitcode         | Exit code to use if there are results with severity of "error". Conventionally, 0 is used for success and all non-zero codes for an error. (default is 2) |
+|       | --no-color         | Don't use colors in the output (default is false) |
 
 ## Configuration File
 
@@ -234,6 +248,7 @@ enabledAuditors:
   apparmor: false
   asat: false
   capabilities: true
+  deprecatedapis: true
   hostns: true
   image: true
   limits: true
@@ -248,6 +263,11 @@ auditors:
   capabilities:
     # add capabilities needed to the add list, so kubeaudit won't report errors
     allowAddList: ['AUDIT_WRITE', 'CHOWN']
+  deprecatedapis:
+    # If no versions are specified and the'deprecatedapis' auditor is enabled, WARN
+    # results will be genereted for the resources defined with a deprecated API.
+    currentVersion: '1.22'
+    targetedVersion: '1.25'
   image:
     # If no image is specified and the 'image' auditor is enabled, WARN results
     # will be generated for containers which use an image without a tag
@@ -261,7 +281,7 @@ auditors:
 
 For more details about each auditor, including a description of the auditor-specific configuration in the config, see the [Auditor Docs](#auditors).
 
-**Note**: The kubeaudit config is not the same as the kubeconfig file specified with the `-c/--kubeconfig` flag, which refers to the Kubernetes config file (see [Local Mode](/README.md#local-mode)). Also note that only the `all` and `autofix` commands support using a kubeaudit config. It will not work with other commands.
+**Note**: The kubeaudit config is not the same as the kubeconfig file specified with the `--kubeconfig` flag, which refers to the Kubernetes config file (see [Local Mode](/README.md#local-mode)). Also note that only the `all` and `autofix` commands support using a kubeaudit config. It will not work with other commands.
 
 **Note**: If flags are used in combination with the config file, flags will take precedence.
 
@@ -276,13 +296,13 @@ The `key` is a combination of the override type (container or pod) and an `overr
 1. **Container overrides**, which override the auditor for that specific container, are formatted as follows:
 
 ```yaml
-container.audit.kubernetes.io/[container name].[override identifier]
+container.kubeaudit.io/[container name].[override identifier]
 ```
 
 2. **Pod overrides**, which override the auditor for all containers within the pod, are formatted as follows:
 
 ```yaml
-audit.kubernetes.io/pod.[override identifier]
+kubeaudit.io/[override identifier]
 ```
 
 If the `value` is set to a non-empty string, it will be displayed in the `info` result as the `OverrideReason`:
@@ -316,7 +336,7 @@ To learn more about labels, see https://kubernetes.io/docs/concepts/overview/wor
 
 ## Contributing
 
-If you'd like to fix a bug, contribute a feature or just correct a typo, please feel free to do so as long as you follow our [Code of Conduct](https://github.com/Shopify/kubeaudit/blob/master/CODE_OF_CONDUCT.md).
+If you'd like to fix a bug, contribute a feature or just correct a typo, please feel free to do so as long as you follow our [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 1. Create your own fork!
 1. Get the source: `go get github.com/Shopify/kubeaudit`
@@ -324,7 +344,7 @@ If you'd like to fix a bug, contribute a feature or just correct a typo, please 
 1. Add your forked repo as a fork: `git remote add fork https://github.com/you-are-awesome/kubeaudit`
 1. Create your feature branch: `git checkout -b awesome-new-feature`
 1. Install [Kind](https://kind.sigs.k8s.io/#installation-and-usage)
-1. Run the tests to see everything is working as expected: `make test` (to run tests without Kind: `USE_KIND=false make test`)
+1. Run the tests to see everything is working as expected: `USE_KIND=true make test` (to run tests without Kind: `make test`)
 1. Commit your changes: `git commit -am 'Adds awesome feature'`
 1. Push to the branch: `git push fork`
 1. Sign the [Contributor License Agreement](https://cla.shopify.com/)

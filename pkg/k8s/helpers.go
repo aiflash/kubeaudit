@@ -1,5 +1,9 @@
 package k8s
 
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
 // NewTrue returns a pointer to a boolean variable set to true
 func NewTrue() *bool {
 	b := true
@@ -17,9 +21,26 @@ func GetContainers(resource Resource) []*ContainerV1 {
 		return nil
 	}
 
-	containers := make([]*ContainerV1, len(podSpec.Containers))
+	var containers []*ContainerV1
 	for i := range podSpec.Containers {
-		containers[i] = &podSpec.Containers[i]
+		containers = append(containers, &podSpec.Containers[i])
+	}
+
+	if len(podSpec.InitContainers) > 0 {
+		containers = append(containers, GetInitContainers(resource)...)
+	}
+	return containers
+}
+
+func GetInitContainers(resource Resource) []*ContainerV1 {
+	podSpec := GetPodSpec(resource)
+	if podSpec == nil {
+		return nil
+	}
+
+	containers := make([]*ContainerV1, len(podSpec.InitContainers))
+	for i := range podSpec.InitContainers {
+		containers[i] = &podSpec.InitContainers[i]
 	}
 	return containers
 }
@@ -47,52 +68,17 @@ func GetLabels(resource Resource) map[string]string {
 }
 
 // GetObjectMeta returns the highest-level ObjectMeta
-func GetObjectMeta(resource Resource) *ObjectMetaV1 {
-	switch kubeType := resource.(type) {
-	case *CronJobV1Beta1:
-		return &kubeType.ObjectMeta
-	case *DaemonSetV1:
-		return &kubeType.ObjectMeta
-	case *DaemonSetV1Beta1:
-		return &kubeType.ObjectMeta
-	case *DaemonSetV1Beta2:
-		return &kubeType.ObjectMeta
-	case *DeploymentExtensionsV1Beta1:
-		return &kubeType.ObjectMeta
-	case *DeploymentV1:
-		return &kubeType.ObjectMeta
-	case *DeploymentV1Beta1:
-		return &kubeType.ObjectMeta
-	case *DeploymentV1Beta2:
-		return &kubeType.ObjectMeta
-	case *JobV1:
-		return &kubeType.ObjectMeta
-	case *PodTemplateV1:
-		return &kubeType.ObjectMeta
-	case *ReplicationControllerV1:
-		return &kubeType.ObjectMeta
-	case *StatefulSetV1:
-		return &kubeType.ObjectMeta
-	case *StatefulSetV1Beta1:
-		return &kubeType.ObjectMeta
-	case *PodV1:
-		return &kubeType.ObjectMeta
-	case *NamespaceV1:
-		return &kubeType.ObjectMeta
-	case *NetworkPolicyV1:
-		return &kubeType.ObjectMeta
-	case *ServiceAccountV1:
-		return &kubeType.ObjectMeta
-	case *ServiceV1:
-		return &kubeType.ObjectMeta
+func GetObjectMeta(resource Resource) metav1.Object {
+	obj, _ := resource.(metav1.ObjectMetaAccessor)
+	if obj != nil {
+		return obj.GetObjectMeta()
 	}
-
 	return nil
 }
 
 // GetPodObjectMeta returns the ObjectMeta at the pod level. If the resource does not have pods, then it returns
 // the highest-level ObjectMeta
-func GetPodObjectMeta(resource Resource) *ObjectMetaV1 {
+func GetPodObjectMeta(resource Resource) metav1.Object {
 	podTemplateSpec := GetPodTemplateSpec(resource)
 	if podTemplateSpec != nil {
 		return &podTemplateSpec.ObjectMeta
@@ -127,17 +113,7 @@ func GetPodTemplateSpec(resource Resource) *PodTemplateSpecV1 {
 		return &kubeType.Spec.JobTemplate.Spec.Template
 	case *DaemonSetV1:
 		return &kubeType.Spec.Template
-	case *DaemonSetV1Beta1:
-		return &kubeType.Spec.Template
-	case *DaemonSetV1Beta2:
-		return &kubeType.Spec.Template
-	case *DeploymentExtensionsV1Beta1:
-		return &kubeType.Spec.Template
 	case *DeploymentV1:
-		return &kubeType.Spec.Template
-	case *DeploymentV1Beta1:
-		return &kubeType.Spec.Template
-	case *DeploymentV1Beta2:
 		return &kubeType.Spec.Template
 	case *JobV1:
 		return &kubeType.Spec.Template
@@ -146,8 +122,6 @@ func GetPodTemplateSpec(resource Resource) *PodTemplateSpecV1 {
 	case *ReplicationControllerV1:
 		return kubeType.Spec.Template
 	case *StatefulSetV1:
-		return &kubeType.Spec.Template
-	case *StatefulSetV1Beta1:
 		return &kubeType.Spec.Template
 	case *PodV1, *NamespaceV1:
 		return nil

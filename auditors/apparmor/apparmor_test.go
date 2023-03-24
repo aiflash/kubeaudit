@@ -6,6 +6,7 @@ import (
 
 	"github.com/Shopify/kubeaudit/internal/test"
 	"github.com/Shopify/kubeaudit/pkg/k8s"
+	"github.com/Shopify/kubeaudit/pkg/override"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,8 +20,15 @@ func TestAuditAppArmor(t *testing.T) {
 	}{
 		{"apparmor-enabled.yml", nil, true},
 		{"apparmor-annotation-missing.yml", []string{AppArmorAnnotationMissing}, true},
+		{"apparmor-annotation-init-container-enabled.yml", nil, true},
+		{"apparmor-annotation-init-container-missing.yml", []string{AppArmorAnnotationMissing}, true},
+		{"apparmor-disabled.yml", []string{AppArmorDisabled}, true},
+		{"apparmor-disabled-overriden.yml", []string{override.GetOverriddenResultName(AppArmorDisabled)}, true},
+		{"apparmor-disabled-overriden-old-label.yml", []string{override.GetOverriddenResultName(AppArmorDisabled)}, true},
+		{"apparmor-disabled-overriden-multiple.yml", []string{AppArmorAnnotationMissing, override.GetOverriddenResultName(AppArmorDisabled)}, true},
 		// These are invalid manifests so we should only test it in manifest mode as kubernetes will fail to apply it
-		{"apparmor-disabled.yml", []string{AppArmorDisabled}, false},
+		{"apparmor-bad-value.yml", []string{AppArmorBadValue}, false},
+		{"apparmor-bad-value-override.yml", []string{AppArmorBadValue}, false},
 		{"apparmor-invalid-annotation.yml", []string{AppArmorInvalidAnnotation}, false},
 	}
 

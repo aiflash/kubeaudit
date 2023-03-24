@@ -8,6 +8,7 @@ import (
 	"github.com/Shopify/kubeaudit/auditors/apparmor"
 	"github.com/Shopify/kubeaudit/auditors/asat"
 	"github.com/Shopify/kubeaudit/auditors/capabilities"
+	"github.com/Shopify/kubeaudit/auditors/deprecatedapis"
 	"github.com/Shopify/kubeaudit/auditors/mounts"
 
 	"github.com/Shopify/kubeaudit/auditors/hostns"
@@ -42,10 +43,12 @@ func TestAuditAll(t *testing.T) {
 		privesc.AllowPrivilegeEscalationNil,
 		privileged.PrivilegedNil,
 		rootfs.ReadOnlyRootFilesystemNil,
-		seccomp.SeccompAnnotationMissing,
+		seccomp.SeccompProfileMissing,
 	}
 
-	allAuditors, err := Auditors(config.KubeauditConfig{})
+	allAuditors, err := Auditors(
+		// Not all the tested resources raise an deprecated API error
+		config.KubeauditConfig{EnabledAuditors: map[string]bool{deprecatedapis.Name: false}})
 	require.NoError(t, err)
 
 	for _, file := range test.GetAllFileNames(t, fixtureDir) {
@@ -83,7 +86,7 @@ func TestAllWithConfig(t *testing.T) {
 	}
 	expectedErrors := []string{
 		apparmor.AppArmorAnnotationMissing,
-		seccomp.SeccompAnnotationMissing,
+		seccomp.SeccompProfileMissing,
 	}
 
 	conf := config.KubeauditConfig{
@@ -121,6 +124,7 @@ func TestGetEnabledAuditors(t *testing.T) {
 			expectedAuditors: []string{
 				asat.Name,
 				capabilities.Name,
+				deprecatedapis.Name,
 				hostns.Name,
 				image.Name,
 				limits.Name,
@@ -152,6 +156,7 @@ func TestGetEnabledAuditors(t *testing.T) {
 			expectedAuditors: []string{
 				asat.Name,
 				capabilities.Name,
+				deprecatedapis.Name,
 				hostns.Name,
 				image.Name,
 				limits.Name,

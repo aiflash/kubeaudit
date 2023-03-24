@@ -43,7 +43,7 @@ metadata:
 	}
 
 	// Run the audit in manifest mode
-	report, err := auditor.AuditManifest(strings.NewReader(manifest))
+	report, err := auditor.AuditManifest("", strings.NewReader(manifest))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func Example_auditLocal() {
 	}
 
 	// Run the audit in local mode
-	report, err := auditor.AuditLocal("", kubeaudit.AuditOptions{})
+	report, err := auditor.AuditLocal("", "", kubeaudit.AuditOptions{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -136,7 +136,7 @@ metadata:
 	}
 
 	// Run the audit in the mode of your choosing. Here we use manifest mode.
-	report, err := auditor.AuditManifest(strings.NewReader(manifest))
+	report, err := auditor.AuditManifest("", strings.NewReader(manifest))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -188,7 +188,7 @@ metadata:
 	}
 
 	// Run the audit in the mode of your choosing. Here we use manifest mode.
-	report, err := auditor.AuditManifest(strings.NewReader(manifest))
+	report, err := auditor.AuditManifest("", strings.NewReader(manifest))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func Example_printOptions() {
 		log.Fatal(err)
 	}
 
-	report, err := auditor.AuditLocal("", kubeaudit.AuditOptions{})
+	report, err := auditor.AuditLocal("", "", kubeaudit.AuditOptions{})
 	if err != nil {
 		log.Fatal(err)
 	}

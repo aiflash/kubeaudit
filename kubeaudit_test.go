@@ -1,7 +1,6 @@
 package kubeaudit_test
 
 import (
-	"os"
 	"testing"
 
 	"github.com/Shopify/kubeaudit"
@@ -29,7 +28,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestAuditLocal(t *testing.T) {
-	if os.Getenv("USE_KIND") == "false" {
+	if !test.UseKind() {
 		return
 	}
 
@@ -41,10 +40,13 @@ func TestAuditLocal(t *testing.T) {
 	auditor, err := kubeaudit.New(allAuditors)
 	require.NoError(err)
 
-	_, err = auditor.AuditLocal("", k8sinternal.ClientOptions{})
+	_, err = auditor.AuditLocal("", "", k8sinternal.ClientOptions{})
 	require.NoError(err)
 
-	_, err = auditor.AuditLocal("invalid_path", k8sinternal.ClientOptions{})
+	_, err = auditor.AuditLocal("invalid_path", "", k8sinternal.ClientOptions{})
+	require.NotNil(err)
+
+	_, err = auditor.AuditLocal("", "invalid_context", k8sinternal.ClientOptions{})
 	require.NotNil(err)
 }
 

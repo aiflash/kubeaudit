@@ -5,12 +5,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/Shopify/kubeaudit/internal/k8sinternal"
 	"github.com/Shopify/kubeaudit/pkg/k8s"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/runtime"
-	fakeclientset "k8s.io/client-go/kubernetes/fake"
 )
 
 type logEntry struct {
@@ -23,26 +20,10 @@ type logEntry struct {
 	ResourceNamespace  string
 }
 
-func TestGetResourcesFromClientset(t *testing.T) {
-	resources := []runtime.Object{k8s.NewDeployment(), k8s.NewNamespace()}
-
-	expected := make([]KubeResource, 0, len(resources))
-	for _, resource := range resources {
-		expected = append(expected, &kubeResource{object: resource})
-	}
-
-	got := getResourcesFromClientset(fakeclientset.NewSimpleClientset(resources...), k8sinternal.ClientOptions{})
-	assert.Len(t, got, len(expected), "Got an unexpected number of resources from clientset")
-	for i, resource := range got {
-		assert.Equal(t, expected[i].Object().GetObjectKind().GroupVersionKind().Kind,
-			resource.Object().GetObjectKind().GroupVersionKind().Kind)
-	}
-}
-
 func TestPrintResults(t *testing.T) {
 	report := Report{
 		results: []Result{
-			&workloadResult{
+			&WorkloadResult{
 				AuditResults: []*AuditResult{
 					newTestAuditResult(Error),
 					newTestAuditResult(Warn),
@@ -75,7 +56,7 @@ func TestPrintResults(t *testing.T) {
 
 func newTestAuditResult(severity SeverityLevel) *AuditResult {
 	return &AuditResult{
-		Name:     "MyAuditResult",
+		Rule:     "MyAuditResult",
 		Severity: severity,
 		Metadata: Metadata{"Foo": "bar"},
 	}
@@ -93,7 +74,7 @@ func TestLogAuditResult(t *testing.T) {
 		auditResult := newTestAuditResult(severity)
 		report := &Report{
 			results: []Result{
-				&workloadResult{
+				&WorkloadResult{
 					AuditResults: []*AuditResult{
 						auditResult,
 					},

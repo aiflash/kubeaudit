@@ -108,6 +108,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"path/filepath"
+	"strings"
 
 	"github.com/Shopify/kubeaudit/internal/k8sinternal"
 	"github.com/Shopify/kubeaudit/pkg/k8s"
@@ -138,7 +140,7 @@ func New(auditors []Auditable, opts ...Option) (*Kubeaudit, error) {
 }
 
 // AuditManifest audits the Kubernetes resources in the provided manifest
-func (a *Kubeaudit) AuditManifest(manifest io.Reader) (*Report, error) {
+func (a *Kubeaudit) AuditManifest(manifestPath string, manifest io.Reader) (*Report, error) {
 	manifestBytes, err := ioutil.ReadAll(manifest)
 	if err != nil {
 		return nil, err
@@ -154,7 +156,19 @@ func (a *Kubeaudit) AuditManifest(manifest io.Reader) (*Report, error) {
 		return nil, err
 	}
 
-	report := &Report{results: results}
+	for _, result := range results {
+		auditResults := result.GetAuditResults()
+
+		if !filepath.IsAbs(manifestPath) {
+			manifestPath = strings.TrimPrefix(filepath.Clean("/"+manifestPath), "/")
+		}
+
+		for _, ar := range auditResults {
+			ar.FilePath = manifestPath
+		}
+	}
+
+	report := NewReport(results)
 
 	return report, nil
 }
@@ -165,38 +179,44 @@ func (a *Kubeaudit) AuditCluster(options AuditOptions) (*Report, error) {
 		return nil, errors.New("failed to audit resources in cluster mode: not running in cluster")
 	}
 
-	clientset, err := k8sinternal.NewKubeClientCluster(k8sinternal.DefaultClient)
+	client, err := k8sinternal.NewKubeClientCluster(k8sinternal.DefaultClient)
 	if err != nil {
 		return nil, err
 	}
 
-	resources := getResourcesFromClientset(clientset, options)
+	resources, err := getResourcesFromClient(client, options)
+	if err != nil {
+		return nil, err
+	}
 	results, err := auditResources(resources, a.auditors)
 	if err != nil {
 		return nil, err
 	}
 
-	report := &Report{results: results}
+	report := NewReport(results)
 
 	return report, nil
 }
 
 // AuditLocal audits the Kubernetes resources found in the provided Kubernetes config file
-func (a *Kubeaudit) AuditLocal(configpath string, options AuditOptions) (*Report, error) {
-	clientset, err := k8sinternal.NewKubeClientLocal(configpath)
+func (a *Kubeaudit) AuditLocal(configpath string, context string, options AuditOptions) (*Report, error) {
+	client, err := k8sinternal.NewKubeClientLocal(configpath, context)
 	if err == k8sinternal.ErrNoReadableKubeConfig {
 		return nil, fmt.Errorf("failed to open kubeconfig file %s", configpath)
 	} else if err != nil {
 		return nil, err
 	}
 
-	resources := getResourcesFromClientset(clientset, options)
+	resources, err := getResourcesFromClient(client, options)
+	if err != nil {
+		return nil, err
+	}
 	results, err := auditResources(resources, a.auditors)
 	if err != nil {
 		return nil, err
 	}
 
-	report := &Report{results: results}
+	report := NewReport(results)
 
 	return report, nil
 }
@@ -204,6 +224,10 @@ func (a *Kubeaudit) AuditLocal(configpath string, options AuditOptions) (*Report
 // Report contains the results after auditing
 type Report struct {
 	results []Result
+}
+
+func NewReport(results []Result) *Report {
+	return &Report{results}
 }
 
 // RawResults returns all of the results for each Kubernetes resource, including ones that had no audit results.
@@ -214,8 +238,8 @@ func (r *Report) RawResults() []Result {
 
 // Results returns the audit results for each Kubernetes resource
 func (r *Report) Results() []Result {
-	results := make([]Result, 0, len(r.results))
-	for _, result := range r.results {
+	results := make([]Result, 0, len(r.RawResults()))
+	for _, result := range r.RawResults() {
 		if len(result.GetAuditResults()) > 0 {
 			results = append(results, result)
 		}
@@ -226,7 +250,7 @@ func (r *Report) Results() []Result {
 // ResultsWithMinSeverity returns the audit results for each Kubernetes resource with a minimum severity
 func (r *Report) ResultsWithMinSeverity(minSeverity SeverityLevel) []Result {
 	var results []Result
-	for _, result := range r.results {
+	for _, result := range r.RawResults() {
 		var filteredAuditResults []*AuditResult
 		for _, auditResult := range result.GetAuditResults() {
 			if auditResult.Severity >= minSeverity {
@@ -234,7 +258,7 @@ func (r *Report) ResultsWithMinSeverity(minSeverity SeverityLevel) []Result {
 			}
 		}
 		if len(filteredAuditResults) > 0 {
-			results = append(results, &workloadResult{
+			results = append(results, &WorkloadResult{
 				Resource:     result.GetResource(),
 				AuditResults: filteredAuditResults,
 			})
@@ -264,7 +288,7 @@ func (r *Report) PrintResults(printOptions ...PrintOption) {
 // Fix tries to automatically patch any security concerns and writes the resulting manifest to the provided writer.
 // Only applies when audit was performed on a manifest (not local or cluster)
 func (r *Report) Fix(writer io.Writer) error {
-	fixed, err := fix(r.results)
+	fixed, err := fix(r.RawResults())
 	if err != nil {
 		return err
 	}

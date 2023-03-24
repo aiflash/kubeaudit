@@ -7,17 +7,20 @@ import (
 	"github.com/Shopify/kubeaudit/internal/k8sinternal"
 	"github.com/Shopify/kubeaudit/pkg/k8s"
 	"gopkg.in/yaml.v3"
-	"k8s.io/client-go/kubernetes"
 )
 
-func getResourcesFromClientset(clientset kubernetes.Interface, options k8sinternal.ClientOptions) []KubeResource {
+func getResourcesFromClient(client k8sinternal.KubeClient, options k8sinternal.ClientOptions) ([]KubeResource, error) {
 	var resources []KubeResource
 
-	for _, resource := range k8sinternal.GetAllResources(clientset, options) {
+	k8sresources, err := client.GetAllResources(options)
+	if err != nil {
+		return nil, err
+	}
+	for _, resource := range k8sresources {
 		resources = append(resources, &kubeResource{object: resource})
 	}
 
-	return resources
+	return resources, nil
 }
 
 func getResourcesFromManifest(data []byte) ([]KubeResource, error) {
@@ -57,22 +60,12 @@ func auditResources(resources []KubeResource, auditable []Auditable) ([]Result, 
 }
 
 func auditResource(resource KubeResource, resources []KubeResource, auditables []Auditable) (Result, error) {
-	result := &workloadResult{
+	result := &WorkloadResult{
 		Resource:     resource,
 		AuditResults: []*AuditResult{},
 	}
 
 	if resource.Object() == nil {
-		return result, nil
-	}
-
-	if !k8s.IsSupportedResourceType(resource.Object()) {
-		auditResult := &AuditResult{
-			Name:     ErrorUnsupportedResource,
-			Severity: Warn,
-			Message:  "Resource is not currently supported.",
-		}
-		result.AuditResults = append(result.AuditResults, auditResult)
 		return result, nil
 	}
 

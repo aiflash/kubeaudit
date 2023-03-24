@@ -1,4 +1,4 @@
-apiVersion: apps/v1beta2
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: deployment
@@ -11,8 +11,8 @@ spec:
     metadata:
       labels:
         name: deployment
-        container.audit.kubernetes.io/container1.allow-capability-chown: "SomeReason"
-        container.audit.kubernetes.io/container1.allow-capability-sys-time: "SomeReason"
+        container.kubeaudit.io/container1.allow-capability-chown: "SomeReason"
+        container.kubeaudit.io/container1.allow-capability-sys-time: "SomeReason"
     spec:
       containers:
         - name: container1

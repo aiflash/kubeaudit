@@ -22,17 +22,17 @@ const SharedFixturesDir = "../../internal/test/fixtures"
 const MANIFEST_MODE = "manifest"
 const LOCAL_MODE = "local"
 
-func AuditManifest(t *testing.T, fixtureDir, fixture string, auditable kubeaudit.Auditable, expectedErrors []string) {
-	AuditMultiple(t, fixtureDir, fixture, []kubeaudit.Auditable{auditable}, expectedErrors, "", MANIFEST_MODE)
+func AuditManifest(t *testing.T, fixtureDir, fixture string, auditable kubeaudit.Auditable, expectedErrors []string) *kubeaudit.Report {
+	return AuditMultiple(t, fixtureDir, fixture, []kubeaudit.Auditable{auditable}, expectedErrors, "", MANIFEST_MODE)
 }
 
-func AuditLocal(t *testing.T, fixtureDir, fixture string, auditable kubeaudit.Auditable, namespace string, expectedErrors []string) {
-	AuditMultiple(t, fixtureDir, fixture, []kubeaudit.Auditable{auditable}, expectedErrors, namespace, LOCAL_MODE)
+func AuditLocal(t *testing.T, fixtureDir, fixture string, auditable kubeaudit.Auditable, namespace string, expectedErrors []string) *kubeaudit.Report {
+	return AuditMultiple(t, fixtureDir, fixture, []kubeaudit.Auditable{auditable}, expectedErrors, namespace, LOCAL_MODE)
 }
 
-func AuditMultiple(t *testing.T, fixtureDir, fixture string, auditables []kubeaudit.Auditable, expectedErrors []string, namespace string, mode string) {
-	if mode == LOCAL_MODE && os.Getenv("USE_KIND") == "false" {
-		return
+func AuditMultiple(t *testing.T, fixtureDir, fixture string, auditables []kubeaudit.Auditable, expectedErrors []string, namespace string, mode string) *kubeaudit.Report {
+	if mode == LOCAL_MODE && !UseKind() {
+		return nil
 	}
 
 	expected := make(map[string]bool, len(expectedErrors))
@@ -46,11 +46,12 @@ func AuditMultiple(t *testing.T, fixtureDir, fixture string, auditables []kubeau
 	errors := make(map[string]bool)
 	for _, result := range report.Results() {
 		for _, auditResult := range result.GetAuditResults() {
-			errors[auditResult.Name] = true
+			errors[auditResult.Rule] = true
 		}
 	}
 
 	assert.Equal(t, expected, errors)
+	return report
 }
 
 func FixSetup(t *testing.T, fixtureDir, fixture string, auditable kubeaudit.Auditable) (fixedResources []k8s.Resource, report *kubeaudit.Report) {
@@ -78,7 +79,7 @@ func FixSetupMultiple(t *testing.T, fixtureDir, fixture string, auditables []kub
 	auditor, err := kubeaudit.New(auditables)
 	require.Nil(err)
 
-	report, err = auditor.AuditManifest(fixedManifest)
+	report, err = auditor.AuditManifest("", fixedManifest)
 	require.Nil(err)
 
 	results := report.RawResults()
@@ -104,14 +105,15 @@ func GetReport(t *testing.T, fixtureDir, fixture string, auditables []kubeaudit.
 	var report *kubeaudit.Report
 	switch mode {
 	case MANIFEST_MODE:
-		manifest, err := os.Open(fixture)
-		require.NoError(err)
-		report, err = auditor.AuditManifest(manifest)
+		manifest, openErr := os.Open(fixture)
+		require.NoError(openErr)
+		defer manifest.Close()
+		report, err = auditor.AuditManifest("", manifest)
 	case LOCAL_MODE:
-		defer deleteNamespace(t, namespace)
-		createNamespace(t, namespace)
-		applyManifest(t, fixture, namespace)
-		report, err = auditor.AuditLocal("", k8sinternal.ClientOptions{Namespace: namespace})
+		defer DeleteNamespace(t, namespace)
+		CreateNamespace(t, namespace)
+		ApplyManifest(t, fixture, namespace)
+		report, err = auditor.AuditLocal("", "", k8sinternal.ClientOptions{Namespace: namespace})
 	}
 
 	require.NoError(err)
@@ -133,17 +135,22 @@ func GetAllFileNames(t *testing.T, directory string) []string {
 	return fileNames
 }
 
-func applyManifest(t *testing.T, manifestPath, namespace string) {
+// UseKind returns true if tests which utilize Kind should run
+func UseKind() bool {
+	return os.Getenv("USE_KIND") == "true"
+}
+
+func ApplyManifest(t *testing.T, manifestPath, namespace string) {
 	t.Helper()
 	runCmd(t, exec.Command("kubectl", "apply", "-f", manifestPath, "-n", namespace))
 }
 
-func createNamespace(t *testing.T, namespace string) {
+func CreateNamespace(t *testing.T, namespace string) {
 	t.Helper()
 	runCmd(t, exec.Command("kubectl", "create", "namespace", namespace))
 }
 
-func deleteNamespace(t *testing.T, namespace string) {
+func DeleteNamespace(t *testing.T, namespace string) {
 	t.Helper()
 	runCmd(t, exec.Command("kubectl", "delete", "namespace", namespace))
 }
